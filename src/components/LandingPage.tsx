@@ -18,6 +18,7 @@ import { ThemeSelector } from './ThemeSelector';
 
 interface LandingPageProps {
   onSignIn: () => Promise<void>;
+  onGuestSignIn?: () => Promise<void>;
   onOpenSecurity: () => void;
   authLoading: boolean;
   authError: string | null;
@@ -25,12 +26,14 @@ interface LandingPageProps {
 
 export const LandingPage: React.FC<LandingPageProps> = ({
   onSignIn,
+  onGuestSignIn,
   onOpenSecurity,
   authLoading,
   authError
 }) => {
   const { t, language } = useLanguage();
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isGuestSigningIn, setIsGuestSigningIn] = useState(false);
 
   const handleSignInClick = async () => {
     setIsSigningIn(true);
@@ -40,6 +43,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       console.error('Sign in failed:', err);
     } finally {
       setIsSigningIn(false);
+    }
+  };
+
+  const handleGuestSignInClick = async () => {
+    if (!onGuestSignIn) return;
+    setIsGuestSigningIn(true);
+    try {
+      await onGuestSignIn();
+    } catch (err) {
+      console.error('Guest sign in failed:', err);
+    } finally {
+      setIsGuestSigningIn(false);
     }
   };
 
@@ -122,13 +137,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </div>
         )}
 
-        {/* Primary CTA: Google Sign In */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 max-w-md mx-auto mb-14">
+        {/* Primary CTA: Google Sign In & Instant Guest Journaling */}
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 max-w-lg mx-auto mb-14">
           <button
             id="google-sign-in-cta-btn"
-            disabled={isSigningIn || authLoading}
+            disabled={isSigningIn || isGuestSigningIn || authLoading}
             onClick={handleSignInClick}
-            className="w-full sm:w-auto px-8 py-3.5 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 rounded-2xl font-semibold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-3 cursor-pointer disabled:opacity-60"
+            className="w-full sm:w-auto px-7 py-3.5 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 rounded-2xl font-semibold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-3 cursor-pointer disabled:opacity-60"
           >
             {/* Google Icon */}
             <svg className="w-4 h-4" viewBox="0 0 24 24">
@@ -149,8 +164,20 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
               />
             </svg>
-            <span>{isSigningIn || authLoading ? 'Authenticating...' : t('signInWithGoogle')}</span>
+            <span>{isSigningIn ? 'Authenticating...' : t('signInWithGoogle')}</span>
           </button>
+
+          {onGuestSignIn && (
+            <button
+              id="guest-sign-in-cta-btn"
+              disabled={isSigningIn || isGuestSigningIn || authLoading}
+              onClick={handleGuestSignInClick}
+              className="w-full sm:w-auto px-6 py-3.5 bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 border border-stone-200 dark:border-stone-700 rounded-2xl font-semibold text-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+            >
+              <Feather className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              <span>{isGuestSigningIn ? 'Starting...' : 'Instant Guest Reflection'}</span>
+            </button>
+          )}
         </div>
 
         {/* Feature Pillars */}

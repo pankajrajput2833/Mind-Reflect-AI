@@ -1,0 +1,60 @@
+{
+  "entities": {
+    "UserPreferences": {
+      "title": "UserPreferences",
+      "description": "User custom settings such as theme and preferred language.",
+      "type": "object",
+      "properties": {
+        "theme": { "type": "string", "description": "Selected theme mode (zen, obsidian, light, glass)" },
+        "preferredLanguage": { "type": "string", "description": "Preferred interface language" },
+        "defaultPersona": { "type": "string", "description": "Default reflection persona" },
+        "updatedAt": { "type": "number", "description": "Unix timestamp in milliseconds" }
+      }
+    },
+    "JournalSession": {
+      "title": "JournalSession",
+      "description": "A journaling session holding reflective conversation and insights.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Session title" },
+        "language": { "type": "string", "description": "Language code" },
+        "persona": { "type": "string", "description": "AI reflection persona" },
+        "createdAt": { "type": "number", "description": "Unix timestamp of creation" },
+        "updatedAt": { "type": "number", "description": "Unix timestamp of last modification" },
+        "summary": { "type": "string", "description": "AI generated session summary" },
+        "moodTags": { "type": "array", "description": "List of mood tags associated with session" },
+        "messageCount": { "type": "number", "description": "Total messages in session" },
+        "lastMessageSnippet": { "type": "string", "description": "Preview of last message" }
+      },
+      "required": ["title", "createdAt", "updatedAt"]
+    },
+    "JournalMessage": {
+      "title": "JournalMessage",
+      "description": "Individual user message or AI response in a reflection session.",
+      "type": "object",
+      "properties": {
+        "sender": { "type": "string", "enum": ["user", "model"], "description": "Author of the message" },
+        "content": { "type": "string", "description": "Text content of the reflection" },
+        "timestamp": { "type": "number", "description": "Unix timestamp of message" },
+        "imageUrl": { "type": "string", "description": "Optional multimodal base64 image data" },
+        "persona": { "type": "string", "description": "Persona active during generation" },
+        "moodContext": { "type": "string", "description": "Selected mood context" }
+      },
+      "required": ["sender", "content", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/preferences/{prefId}": {
+      "schema": "UserPreferences",
+      "description": "User preference settings"
+    },
+    "/users/{userId}/sessions/{sessionId}": {
+      "schema": "JournalSession",
+      "description": "User journaling sessions"
+    },
+    "/users/{userId}/sessions/{sessionId}/messages/{messageId}": {
+      "schema": "JournalMessage",
+      "description": "Messages belonging to a journal session"
+    }
+  }
+}

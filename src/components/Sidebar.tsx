@@ -206,7 +206,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
             <button
               id="sidebar-new-session-btn"
-              onClick={onNewSession}
+              onClick={() => onNewSession()}
               className="p-1.5 rounded-lg bg-stone-900 dark:bg-stone-100 hover:bg-stone-800 dark:hover:bg-white text-white dark:text-stone-900 transition-colors cursor-pointer shadow-xs"
               title={t('newEntry')}
             >

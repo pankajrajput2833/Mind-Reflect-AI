@@ -83,7 +83,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {user && (
             <button
               id="nav-new-reflection-btn"
-              onClick={onNewSession}
+              onClick={() => onNewSession()}
               className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-stone-900 dark:bg-stone-100 hover:bg-stone-800 dark:hover:bg-white text-white dark:text-stone-900 shadow-xs transition-colors cursor-pointer"
             >
               <Plus className="w-4 h-4" />

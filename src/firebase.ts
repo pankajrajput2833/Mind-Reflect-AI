@@ -5,6 +5,7 @@ import {
   signInWithPopup, 
   signInWithRedirect,
   getRedirectResult,
+  signInAnonymously,
   signOut, 
   onAuthStateChanged,
   type User 
@@ -62,6 +63,11 @@ export const signInWithGoogle = async (): Promise<User> => {
     }
     throw error;
   }
+};
+
+export const signInAsGuest = async (): Promise<User> => {
+  const result = await signInAnonymously(auth);
+  return result.user;
 };
 
 export const logOut = async (): Promise<void> => {

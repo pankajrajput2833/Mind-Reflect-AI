@@ -3,6 +3,7 @@ import {
   auth, 
   onAuthStateChanged, 
   signInWithGoogle, 
+  signInAsGuest,
   logOut, 
   type User 
 } from './firebase';
@@ -158,6 +159,17 @@ function JournalApp() {
     }
   };
 
+  const handleGuestSignIn = async () => {
+    setAuthError(null);
+    try {
+      await signInAsGuest();
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error('Guest Sign In Error:', error);
+      setAuthError(error.message || 'Failed to initialize guest session');
+    }
+  };
+
   const handleSignOut = async () => {
     try {
       await logOut();
@@ -166,21 +178,43 @@ function JournalApp() {
     }
   };
 
-  const handleNewSession = async (persona?: AIPersona) => {
+  const handleNewSession = async (personaParam?: unknown) => {
     if (!currentUser?.uid) return;
     try {
       setActionError(null);
+      const title = language === 'es' ? 'Nueva Reflexión' : language === 'fr' ? 'Nouvelle Réflexion' : 'New Reflection';
+      const validPersona: AIPersona = (typeof personaParam === 'string' && (personaParam === 'empathetic' || personaParam === 'socratic' || personaParam === 'mentor'))
+        ? personaParam
+        : 'empathetic';
+
       const newId = await createJournalSession(
         currentUser.uid, 
-        language === 'es' ? 'Nueva Reflexión' : 'New Reflection', 
+        title, 
         ['Reflective'], 
         language,
-        persona || 'empathetic'
+        validPersona
       );
+      
+      // Optimistic session addition so UI immediately updates
+      const optimisticSession: JournalSession = {
+        id: newId,
+        userId: currentUser.uid,
+        title,
+        language,
+        persona: validPersona,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        summary: '',
+        moodTags: ['Reflective'],
+        messageCount: 0,
+        lastMessageSnippet: ''
+      };
+      setSessions((prev) => [optimisticSession, ...prev.filter((s) => s.id !== newId)]);
       setActiveSessionId(newId);
-    } catch (err) {
-      console.error('Create session error:', err);
-      setActionError('Could not start a new reflection session');
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error('Create session error:', error);
+      setActionError(`Could not start a new reflection session: ${error.message}`);
     }
   };
 
@@ -246,6 +280,20 @@ function JournalApp() {
     if (!currentUser?.uid) return;
     try {
       const newId = await createJournalSession(currentUser.uid, `${category} Inquiry`, [category]);
+      const optimisticSession: JournalSession = {
+        id: newId,
+        userId: currentUser.uid,
+        title: `${category} Inquiry`,
+        language,
+        persona: 'empathetic',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        summary: '',
+        moodTags: [category],
+        messageCount: 0,
+        lastMessageSnippet: prompt.slice(0, 100)
+      };
+      setSessions((prev) => [optimisticSession, ...prev.filter((s) => s.id !== newId)]);
       setActiveSessionId(newId);
       await handleSendMessage(prompt, category);
     } catch (err) {
@@ -262,17 +310,33 @@ function JournalApp() {
     // If no active session, create one first
     if (!targetSessionId) {
       try {
+        const defaultTitle = language === 'es' ? 'Nueva Reflexión' : language === 'fr' ? 'Nouvelle Réflexion' : 'New Reflection';
         targetSessionId = await createJournalSession(
           currentUser.uid, 
-          language === 'es' ? 'Nueva Reflexión' : 'New Reflection', 
+          defaultTitle, 
           [moodContext || 'Reflective'],
           language,
           'empathetic'
         );
+        const optimisticSession: JournalSession = {
+          id: targetSessionId,
+          userId: currentUser.uid,
+          title: defaultTitle,
+          language,
+          persona: 'empathetic',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          summary: '',
+          moodTags: [moodContext || 'Reflective'],
+          messageCount: 0,
+          lastMessageSnippet: text.slice(0, 100)
+        };
+        setSessions((prev) => [optimisticSession, ...prev.filter((s) => s.id !== targetSessionId)]);
         setActiveSessionId(targetSessionId);
-      } catch (err) {
-        console.error('Failed to create initial session:', err);
-        setActionError('Failed to initialize session');
+      } catch (err: unknown) {
+        const error = err as Error;
+        console.error('Failed to create initial session:', error);
+        setActionError(`Failed to initialize session: ${error.message}`);
         return;
       }
     }
@@ -280,6 +344,18 @@ function JournalApp() {
     const isFirstUserMessage = messages.length === 0;
     setActionError(null);
     setLastFailedMessage({ text, mood: moodContext, img: imageBase64 });
+
+    // Optimistic user message in UI
+    const optimisticMsg: JournalMessage = {
+      id: 'msg_temp_' + Date.now(),
+      sender: 'user',
+      content: text,
+      timestamp: Date.now(),
+      imageUrl: imageBase64 || undefined,
+      persona: activeSession?.persona || 'empathetic',
+      moodContext: moodContext || undefined
+    };
+    setMessages((prev) => [...prev, optimisticMsg]);
 
     try {
       // 1. Save user message to Firestore
@@ -446,6 +522,7 @@ function JournalApp() {
       <>
         <LandingPage
           onSignIn={handleSignIn}
+          onGuestSignIn={handleGuestSignIn}
           onOpenSecurity={() => setIsSecurityModalOpen(true)}
           authLoading={authLoading}
           authError={authError}
@@ -465,7 +542,7 @@ function JournalApp() {
       <Navbar
         user={currentUser}
         onSignOut={handleSignOut}
-        onNewSession={handleNewSession}
+        onNewSession={() => handleNewSession()}
         onOpenSecurity={() => setIsSecurityModalOpen(true)}
         onOpenTrends={handleOpenTrends}
         sessionCount={sessions.length}
@@ -477,7 +554,7 @@ function JournalApp() {
           sessions={sessions}
           activeSessionId={activeSessionId}
           onSelectSession={(id) => setActiveSessionId(id)}
-          onNewSession={handleNewSession}
+          onNewSession={() => handleNewSession()}
           onRenameSession={handleRenameSession}
           onDeleteSession={handleDeleteSession}
           onOpenTrends={handleOpenTrends}
@@ -491,6 +568,7 @@ function JournalApp() {
           isLoadingAi={isLoadingAi}
           streamingAiText={streamingAiText}
           onSendMessage={handleSendMessage}
+          onNewSession={(persona) => handleNewSession(persona)}
           onGenerateSummary={handleOpenSummary}
           onRenameTitle={(newTitle) => {
             if (activeSessionId) return handleRenameSession(activeSessionId, newTitle);

@@ -18,15 +18,42 @@ import type {
   AIPersona 
 } from '../types';
 
-// Helper to strictly strip undefined properties before passing to Firestore SDK
+// Helper to strictly sanitize data for Firestore SDK (strips undefined, non-plain objects/events, functions)
 function sanitizeFirestorePayload<T extends Record<string, unknown>>(data: T): T {
   const sanitized: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(data)) {
-    if (value !== undefined) {
+    if (value === undefined) continue;
+    // Disallow functions, Symbols, or DOM/Synthetic event objects
+    if (typeof value === 'function' || typeof value === 'symbol') continue;
+    if (typeof value === 'object' && value !== null) {
+      // Check if it's an Event or SyntheticEvent
+      if ('nativeEvent' in value || 'target' in value || 'bubbles' in value) {
+        continue;
+      }
+      if (Array.isArray(value)) {
+        sanitized[key] = value.filter(v => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean');
+      } else {
+        // Plain object serialization
+        try {
+          sanitized[key] = JSON.parse(JSON.stringify(value));
+        } catch {
+          // ignore cyclic or non-serializable objects
+        }
+      }
+    } else {
       sanitized[key] = value;
     }
   }
   return sanitized as T;
+}
+
+const VALID_PERSONAS: AIPersona[] = ['empathetic', 'socratic', 'mentor'];
+
+function normalizePersona(persona: unknown): AIPersona {
+  if (typeof persona === 'string' && VALID_PERSONAS.includes(persona as AIPersona)) {
+    return persona as AIPersona;
+  }
+  return 'empathetic';
 }
 
 // 0. User Preferences Management (/users/{userId}/preferences/settings)
@@ -116,16 +143,19 @@ export async function createJournalSession(
 ): Promise<string> {
   const sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
   const now = Date.now();
+  const safePersona = normalizePersona(persona);
+  const safeLanguage = typeof language === 'string' ? language : 'en';
+  const safeTitle = typeof customTitle === 'string' && customTitle.trim() ? customTitle.trim() : 'New Reflection';
 
   const sessionDocRef = doc(db, 'users', userId, 'sessions', sessionId);
   const payload = sanitizeFirestorePayload({
-    title: customTitle || 'New Reflection',
-    language: language || 'en',
-    persona: persona || 'empathetic',
+    title: safeTitle,
+    language: safeLanguage,
+    persona: safePersona,
     createdAt: now,
     updatedAt: now,
     summary: '',
-    moodTags: initialMoodTags && initialMoodTags.length > 0 ? initialMoodTags : ['Reflective'],
+    moodTags: Array.isArray(initialMoodTags) && initialMoodTags.length > 0 ? initialMoodTags : ['Reflective'],
     messageCount: 0,
     lastMessageSnippet: ''
   });
@@ -141,8 +171,31 @@ export async function updateSessionMetadata(
   updates: Partial<Pick<JournalSession, 'title' | 'summary' | 'moodTags' | 'lastMessageSnippet' | 'messageCount' | 'persona' | 'language'>>
 ): Promise<void> {
   const sessionDocRef = doc(db, 'users', userId, 'sessions', sessionId);
+  const sanitizedUpdates: Record<string, unknown> = {};
+  if (updates.title !== undefined && typeof updates.title === 'string') {
+    sanitizedUpdates.title = updates.title;
+  }
+  if (updates.summary !== undefined && typeof updates.summary === 'string') {
+    sanitizedUpdates.summary = updates.summary;
+  }
+  if (updates.persona !== undefined) {
+    sanitizedUpdates.persona = normalizePersona(updates.persona);
+  }
+  if (updates.language !== undefined && typeof updates.language === 'string') {
+    sanitizedUpdates.language = updates.language;
+  }
+  if (updates.lastMessageSnippet !== undefined && typeof updates.lastMessageSnippet === 'string') {
+    sanitizedUpdates.lastMessageSnippet = updates.lastMessageSnippet;
+  }
+  if (updates.messageCount !== undefined && typeof updates.messageCount === 'number') {
+    sanitizedUpdates.messageCount = updates.messageCount;
+  }
+  if (updates.moodTags !== undefined && Array.isArray(updates.moodTags)) {
+    sanitizedUpdates.moodTags = updates.moodTags;
+  }
+
   const payload = sanitizeFirestorePayload({
-    ...updates,
+    ...sanitizedUpdates,
     updatedAt: Date.now()
   });
 
@@ -177,9 +230,9 @@ export function subscribeToSessionMessages(
           sender: (data.sender as 'user' | 'model') || 'user',
           content: data.content || '',
           timestamp: data.timestamp || Date.now(),
-          imageUrl: data.imageUrl || undefined,
-          persona: data.persona || undefined,
-          moodContext: data.moodContext || undefined
+          imageUrl: typeof data.imageUrl === 'string' ? data.imageUrl : undefined,
+          persona: typeof data.persona === 'string' ? normalizePersona(data.persona) : undefined,
+          moodContext: typeof data.moodContext === 'string' ? data.moodContext : undefined
         };
       });
       callback(messages);
@@ -208,12 +261,12 @@ export async function addJournalMessage(
 
   const messageDocRef = doc(db, 'users', userId, 'sessions', sessionId, 'messages', messageId);
   const messagePayload = sanitizeFirestorePayload({
-    sender,
-    content: content.trim(),
+    sender: sender === 'model' ? 'model' : 'user',
+    content: typeof content === 'string' ? content.trim() : '',
     timestamp: now,
-    imageUrl: options?.imageUrl || undefined,
-    persona: options?.persona || undefined,
-    moodContext: options?.moodContext || undefined
+    imageUrl: typeof options?.imageUrl === 'string' ? options.imageUrl : undefined,
+    persona: options?.persona ? normalizePersona(options.persona) : undefined,
+    moodContext: typeof options?.moodContext === 'string' ? options.moodContext : undefined
   });
 
   await setDoc(messageDocRef, messagePayload);
