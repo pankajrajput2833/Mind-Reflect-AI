@@ -1,0 +1,6 @@
+{
+  "name": "Mind Reflect AI",
+  "description": "A secure, responsive full-stack AI Journaling and Reflection application powered by Firebase Auth, Cloud Firestore, and Gemini API.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
